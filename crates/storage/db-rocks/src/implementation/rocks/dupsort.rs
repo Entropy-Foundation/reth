@@ -1,14 +1,10 @@
 use alloy_primitives::B256;
 use bytes::{BufMut, BytesMut};
-// use metrics::Key;
 use reth_db_api::table::Decode;
 use reth_db_api::{
     table::{DupSort, Encode},
     DatabaseError,
 };
-
-// use reth_db::table::Key;
-use reth_db_api::table::Key;
 
 /// Delimiter used to separate key and subkey in DUPSORT tables
 const DELIMITER: u8 = 0xFF;

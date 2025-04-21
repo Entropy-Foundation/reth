@@ -147,7 +147,7 @@ fn test_proof_with_state_changes() {
     // Setup initial state
     let read_tx = RocksTransaction::<false>::new(db.clone(), false);
     let write_tx = RocksTransaction::<true>::new(db.clone(), true);
-    let (initial_root, address1, _, storage_key) = setup_test_state(&read_tx, &write_tx);
+    let (_initial_root, address1, _, storage_key) = setup_test_state(&read_tx, &write_tx);
     
     // Generate a proof for the initial state
     let proof_tx = RocksTransaction::<false>::new(db.clone(), false);
@@ -180,7 +180,7 @@ fn test_proof_with_state_changes() {
     updated_post_state.storages.insert(hashed_address, updated_storage);
     
     // Calculate new state root
-    let updated_root = calculate_state_root_with_updates(
+    let _updated_root = calculate_state_root_with_updates(
         &update_read_tx, 
         &update_write_tx, 
         updated_post_state
@@ -188,7 +188,7 @@ fn test_proof_with_state_changes() {
     update_write_tx.commit().unwrap();
     
     // Verify that the root has changed
-    assert_ne!(initial_root, updated_root, "Root should change after state update");
+    assert_ne!(_initial_root, _updated_root, "Root should change after state update");
     
     // Generate a proof for the updated state
     let updated_proof_tx = RocksTransaction::<false>::new(db.clone(), false);
@@ -200,10 +200,10 @@ fn test_proof_with_state_changes() {
     .expect("Failed to generate updated proof");
     
     // Verify the updated proof matches the new root
-    assert_eq!(updated_proof.root(), updated_root, "Updated proof root should match new state root");
+    assert_eq!(updated_proof.root(), _updated_root, "Updated proof root should match new state root");
     
     // Verify the old proof doesn't match the new root
-    assert_ne!(initial_proof.root(), updated_root, "Old proof should not match new root");
+    assert_ne!(initial_proof.root(), _updated_root, "Old proof should not match new root");
     
     // Get the updated account and storage data
     let new_account = updated_proof_tx.get_account(address1).unwrap().unwrap();

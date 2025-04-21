@@ -29,7 +29,6 @@ impl<T: Table, const WRITE: bool> RocksCursor<T, WRITE>
 where
     T::Key: Encode + Decode + Clone,
 {
-    // pub(crate) fn new(db: Arc<DB>, cf: Arc<ColumnFamily>) -> Result<Self, DatabaseError> {
     pub(crate) fn new(db: Arc<DB>, cf: CFPtr) -> Result<Self, DatabaseError> {
         Ok(Self {
             db,

@@ -1,34 +1,17 @@
 use crate::{
     calculate_state_root_with_updates,
-    // implementation::rocks::trie::RocksHashedCursorFactory,
     tables::trie::{AccountTrieTable, StorageTrieTable, TrieNodeValue, TrieTable},
-    Account,
-    HashedPostState,
-    RocksTransaction,
+    Account, HashedPostState, RocksTransaction,
 };
 use alloy_primitives::{keccak256, Address, B256, U256};
-use reth_db::{
-    // transaction::{DbTx, DbTxMut},
-    HashedAccounts,
-    HashedStorages,
-};
-// use reth_db_api::cursor::{DbCursorRO, DbDupCursorRO, DbDupCursorRW};
+use reth_db::{HashedAccounts, HashedStorages};
 use reth_db_api::table::Table;
-use reth_trie::{
-    // hashed_cursor::{HashedCursor, HashedCursorFactory},
-    // proof::Proof,
-    BranchNodeCompact,
-    Nibbles,
-    // StorageProof,
-    StoredNibbles,
-    TrieMask,
-};
-// use reth_trie_common::{AccountProof, MultiProof, StorageMultiProof};
+use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles, TrieMask};
 use rocksdb::{Options, DB};
 use std::sync::Arc;
 use tempfile::TempDir;
 
-pub fn create_test_db() -> (Arc<DB>, TempDir) {
+pub(super) fn create_test_db() -> (Arc<DB>, TempDir) {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
@@ -58,7 +41,7 @@ pub fn create_test_db() -> (Arc<DB>, TempDir) {
     (Arc::new(db), temp_dir)
 }
 
-pub fn setup_test_state(
+pub(super) fn setup_test_state(
     read_tx: &RocksTransaction<false>,
     write_tx: &RocksTransaction<true>,
 ) -> (B256, Address, Address, B256) {
@@ -97,7 +80,7 @@ pub fn setup_test_state(
     (state_root, address1, address2, storage_key)
 }
 
-pub fn create_trie_node_value(nibbles_str: &str, node_hash: B256) -> TrieNodeValue {
+fn create_trie_node_value(nibbles_str: &str, node_hash: B256) -> TrieNodeValue {
     let nibbles = Nibbles::from_nibbles(
         &nibbles_str.chars().map(|c| c.to_digit(16).unwrap() as u8).collect::<Vec<_>>(),
     );
@@ -105,7 +88,7 @@ pub fn create_trie_node_value(nibbles_str: &str, node_hash: B256) -> TrieNodeVal
     TrieNodeValue { nibbles: StoredNibbles(nibbles), node: node_hash }
 }
 
-pub fn create_test_branch_node() -> BranchNodeCompact {
+fn create_test_branch_node() -> BranchNodeCompact {
     let state_mask = TrieMask::new(0);
     let tree_mask = TrieMask::new(0);
     let hash_mask = TrieMask::new(0);

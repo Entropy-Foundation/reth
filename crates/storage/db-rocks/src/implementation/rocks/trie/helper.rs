@@ -3,12 +3,11 @@ use crate::{
     tables::trie::{AccountTrieTable, StorageTrieTable, TrieNibbles, TrieNodeValue, TrieTable},
 };
 use alloy_primitives::{keccak256, B256};
-use reth_db::transaction::DbTx;
 use reth_db_api::transaction::DbTxMut;
 use reth_execution_errors::StateRootError;
 use reth_trie::{
-    hashed_cursor::HashedPostStateCursorFactory, updates::TrieUpdates, AccountProof,
-    BranchNodeCompact, HashedPostState, Nibbles, StateRoot, StorageProof, StoredNibbles,
+    hashed_cursor::HashedPostStateCursorFactory, updates::TrieUpdates, BranchNodeCompact,
+    HashedPostState, StateRoot, StoredNibbles,
 };
 
 ////////////////////////////

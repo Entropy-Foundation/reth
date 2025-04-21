@@ -64,8 +64,7 @@ mod test;
 
 pub use errors::RocksDBError;
 pub use implementation::rocks::trie::{calculate_state_root, calculate_state_root_with_updates};
-pub use implementation::rocks::RocksDB;
-pub use implementation::rocks::{tx::RocksTransaction, RocksDBConfig};
+pub use implementation::rocks::tx::RocksTransaction;
 pub use reth_primitives_traits::Account;
 pub use reth_trie::HashedPostState;
 
