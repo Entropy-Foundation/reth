@@ -1,10 +1,10 @@
 pub(crate) mod raw;
 pub(crate) mod trie;
-pub(crate) mod utils;
 
 use reth_db_api::table::Table;
 use reth_db_api::DatabaseError;
 use rocksdb::{ColumnFamilyDescriptor, Options};
+
 /// Trait for getting RocksDB-specific table configurations
 pub(crate) trait TableConfig: Table {
     /// Get column family options for this table
