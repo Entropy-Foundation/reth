@@ -88,7 +88,7 @@ fn create_trie_node_value(nibbles_str: &str, node_hash: B256) -> TrieNodeValue {
     TrieNodeValue { nibbles: StoredNibbles(nibbles), node: node_hash }
 }
 
-fn create_test_branch_node() -> BranchNodeCompact {
+pub(crate) fn create_test_branch_node() -> BranchNodeCompact {
     let state_mask = TrieMask::new(0);
     let tree_mask = TrieMask::new(0);
     let hash_mask = TrieMask::new(0);
