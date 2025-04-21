@@ -55,7 +55,7 @@ reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-db-api = { workspace = true }
 
 [features]
-# metrics = ["reth-metrics", "reth-trie/metrics", "dep:metrics"]
+metrics = []
 
 [[bench]]
 name = "get"
