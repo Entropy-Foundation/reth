@@ -7,20 +7,20 @@ pub(crate) struct TableUtils;
 
 impl TableUtils {
     /// List all column families in the database
-    pub fn list_cf(path: &Path) -> Result<Vec<String>, DatabaseError> {
+    pub(crate) fn list_cf(path: &Path) -> Result<Vec<String>, DatabaseError> {
         let cfs = DB::list_cf(&Options::default(), path)
             .map_err(|e| DatabaseError::Other(format!("Failed to list column families: {}", e)))?;
         Ok(cfs)
     }
 
     /// Get all table names that should exist in the database
-    pub fn get_expected_table_names() -> Vec<String> {
+    pub(crate) fn get_expected_table_names() -> Vec<String> {
         use reth_db::Tables;
         Tables::ALL.iter().map(|t| t.name().to_string()).collect()
     }
 
     /// Get column family options for a specific table
-    pub fn get_cf_options<T: Table>() -> Options {
+    pub(crate) fn get_cf_options<T: Table>() -> Options {
         let mut opts = Options::default();
 
         // Set common options
@@ -38,7 +38,7 @@ impl TableUtils {
     }
 
     /// Create column family descriptors for tables that exist in the database
-    pub fn get_existing_cf_descriptors(
+    pub(crate) fn get_existing_cf_descriptors(
         path: &Path,
     ) -> Result<Vec<ColumnFamilyDescriptor>, DatabaseError> {
         let existing = Self::list_cf(path)?;
@@ -53,7 +53,7 @@ impl TableUtils {
     }
 
     /// Check if a database exists and has the correct tables
-    pub fn validate_database(path: &Path) -> Result<bool, DatabaseError> {
+    pub(crate) fn validate_database(path: &Path) -> Result<bool, DatabaseError> {
         if !path.exists() {
             return Ok(false);
         }

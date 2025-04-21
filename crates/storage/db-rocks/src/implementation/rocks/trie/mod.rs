@@ -3,6 +3,6 @@ mod hashed_cursor;
 mod helper;
 mod storage;
 
-pub use cursor::*;
-pub use hashed_cursor::*;
+pub(crate) use cursor::*;
+pub(crate) use hashed_cursor::*;
 pub use helper::*;

@@ -14,7 +14,7 @@ pub(crate) struct DupSortHelper;
 
 impl DupSortHelper {
     /// Create a composite key from key and subkey for DUPSORT tables
-    pub fn create_composite_key<T: DupSort>(
+    pub(crate) fn create_composite_key<T: DupSort>(
         key: &T::Key,
         subkey: &T::SubKey,
     ) -> Result<Vec<u8>, DatabaseError> {
@@ -35,7 +35,7 @@ impl DupSortHelper {
     }
 
     /// Extract key and subkey from composite key
-    pub fn split_composite_key<T: DupSort>(
+    pub(crate) fn split_composite_key<T: DupSort>(
         composite: &[u8],
     ) -> Result<(T::Key, T::SubKey), DatabaseError> {
         if let Some(pos) = composite.iter().position(|&b| b == DELIMITER) {
@@ -50,7 +50,7 @@ impl DupSortHelper {
     }
 
     /// Create prefix for scanning all subkeys of a key
-    pub fn create_prefix<T: DupSort>(key: &T::Key) -> Result<Vec<u8>, DatabaseError> {
+    pub(crate) fn create_prefix<T: DupSort>(key: &T::Key) -> Result<Vec<u8>, DatabaseError> {
         let mut bytes = BytesMut::new();
         let key_bytes = key.clone().encode();
         bytes.put_slice(key_bytes.as_ref());
@@ -58,7 +58,7 @@ impl DupSortHelper {
         Ok(bytes.to_vec())
     }
 
-    pub fn encode_composite_key<T: DupSort>(
+    pub(crate) fn encode_composite_key<T: DupSort>(
         composite_key_vec: Vec<u8>,
     ) -> Result<T::Key, DatabaseError>
     where
