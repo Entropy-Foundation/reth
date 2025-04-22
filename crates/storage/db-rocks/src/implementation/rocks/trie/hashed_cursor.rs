@@ -15,11 +15,11 @@ use std::marker::PhantomData;
 /// Factory for creating hashed cursors specific to RocksDB
 #[derive(Clone, Debug)]
 pub struct RocksHashedCursorFactory<'tx> {
-    tx: &'tx RocksTransaction<false>,
+    tx: &'tx RocksTransaction<'tx, false>,
 }
 
 impl<'tx> RocksHashedCursorFactory<'tx> {
-    pub fn new(tx: &'tx RocksTransaction<false>) -> Self {
+    pub fn new(tx: &'tx RocksTransaction<'tx, false>) -> Self {
         Self { tx }
     }
 }
@@ -30,7 +30,8 @@ impl<'tx> HashedCursorFactory for RocksHashedCursorFactory<'tx> {
 
     fn hashed_account_cursor(&self) -> Result<Self::AccountCursor, DatabaseError> {
         let cursor = self.tx.cursor_read::<HashedAccounts>()?;
-        Ok(RocksHashedAccountCursor { cursor, _phantom: PhantomData })
+        // Ok(RocksHashedAccountCursor { cursor, _phantom: PhantomData })
+        Ok(RocksHashedAccountCursor { cursor })
     }
 
     fn hashed_storage_cursor(
@@ -39,14 +40,15 @@ impl<'tx> HashedCursorFactory for RocksHashedCursorFactory<'tx> {
     ) -> Result<Self::StorageCursor, DatabaseError> {
         let cursor = self.tx.cursor_read::<HashedStorages>()?;
         let dup_cursor = self.tx.cursor_dup_read::<HashedStorages>()?;
-        Ok(RocksHashedStorageCursor { cursor, dup_cursor, hashed_address, _phantom: PhantomData })
+        // Ok(RocksHashedStorageCursor { cursor, dup_cursor, hashed_address, _phantom: PhantomData })
+        Ok(RocksHashedStorageCursor { cursor, dup_cursor, hashed_address })
     }
 }
 
 /// Implementation of HashedCursor for accounts
 pub struct RocksHashedAccountCursor<'tx> {
-    cursor: <RocksTransaction<false> as DbTx>::Cursor<HashedAccounts>,
-    _phantom: PhantomData<&'tx ()>,
+    cursor: <RocksTransaction<'tx, false> as DbTx>::Cursor<HashedAccounts>,
+    // _phantom: PhantomData<&'tx ()>,
 }
 
 impl<'tx> HashedCursor for RocksHashedAccountCursor<'tx> {
@@ -90,10 +92,10 @@ impl<'tx> HashedCursor for RocksHashedAccountCursor<'tx> {
 
 /// Implementation of HashedStorageCursor
 pub struct RocksHashedStorageCursor<'tx> {
-    cursor: <RocksTransaction<false> as DbTx>::Cursor<HashedStorages>,
-    dup_cursor: <RocksTransaction<false> as DbTx>::DupCursor<HashedStorages>,
+    cursor: <RocksTransaction<'tx, false> as DbTx>::Cursor<HashedStorages>,
+    dup_cursor: <RocksTransaction<'tx, false> as DbTx>::DupCursor<HashedStorages>,
     hashed_address: B256,
-    _phantom: PhantomData<&'tx ()>,
+    // _phantom: PhantomData<&'tx ()>,
 }
 
 impl<'tx> HashedCursor for RocksHashedStorageCursor<'tx> {

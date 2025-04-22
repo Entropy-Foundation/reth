@@ -10,14 +10,14 @@ use reth_trie::{BranchNodeCompact, Nibbles, TrieMask}; // For encoding/decoding
 #[derive(Debug)]
 pub struct RocksAccountTrieCursor<'tx> {
     /// Transaction reference
-    tx: &'tx RocksTransaction<false>,
+    tx: &'tx RocksTransaction<'tx, false>,
     /// Current cursor position
     current_key: Option<Nibbles>,
 }
 /// RocksDB implementation of storage trie cursor
 #[derive(Debug)]
 pub struct RocksStorageTrieCursor<'tx> {
-    tx: &'tx RocksTransaction<false>,
+    tx: &'tx RocksTransaction<'tx, false>,
     /// Account hash for storage trie
     hashed_address: B256,
     /// Current cursor position
@@ -283,7 +283,7 @@ impl<'tx> TrieCursor for RocksStorageTrieCursor<'tx> {
 #[derive(Clone, Debug)]
 pub struct RocksTrieCursorFactory<'tx> {
     /// Transaction reference - provides context for all created cursors
-    tx: &'tx RocksTransaction<false>,
+    tx: &'tx RocksTransaction<'tx, false>,
 }
 
 impl<'tx> RocksTrieCursorFactory<'tx> {

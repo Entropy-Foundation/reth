@@ -22,7 +22,7 @@ use reth_trie_db::{
 };
 
 /// Implementation of trie storage operations
-impl<const WRITE: bool> RocksTransaction<WRITE> {
+impl<'a, const WRITE: bool> RocksTransaction<'a, WRITE> {
     /// Get a trie node by its hash
     pub fn get_node(&self, hash: B256) -> Result<Option<Vec<u8>>, DatabaseError> {
         self.get::<TrieTable>(hash)
@@ -62,7 +62,7 @@ impl<const WRITE: bool> RocksTransaction<WRITE> {
         Ok(None).map_err(|e| DatabaseError::Other(format!("ErrReport: {:?}", e)))
     }
 }
-impl<'a> DatabaseStateRoot<'a, RocksTransaction<false>> for &'a RocksTransaction<false> {
+impl<'a> DatabaseStateRoot<'a, RocksTransaction<'a, false>> for &'a RocksTransaction<'a, false> {
     fn from_tx(tx: &'a RocksTransaction<false>) -> Self {
         tx
     }
@@ -195,7 +195,7 @@ impl<'a> DatabaseStateRoot<'a, RocksTransaction<false>> for &'a RocksTransaction
     }
 }
 
-impl<'a> DatabaseStorageRoot<'a, RocksTransaction<false>> for &'a RocksTransaction<false> {
+impl<'a> DatabaseStorageRoot<'a, RocksTransaction<'a, false>> for &'a RocksTransaction<'a, false> {
     fn from_tx(tx: &'a RocksTransaction<false>, address: Address) -> Self {
         tx
     }
