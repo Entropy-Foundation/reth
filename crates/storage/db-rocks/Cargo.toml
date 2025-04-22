@@ -1,0 +1,60 @@
+[package]
+name = "reth-db-rocks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+
+# reth dependencies
+reth-primitives.workspace = true
+reth-db-api.workspace = true
+reth-db.workspace = true
+reth-codecs.workspace = true
+reth-storage-api.workspace = true
+reth-trie = { workspace = true, features = ["test-utils"] }
+reth-trie-db = { workspace = true }
+reth-trie-common = { workspace = true }
+alloy-primitives = { workspace = true }
+reth-primitives-traits = { workspace = true }
+reth-execution-errors = { workspace = true }
+alloy-rlp = { workspace = true }
+
+# rocksdb
+rocksdb = { version = "0.22.0" }
+serde = { workspace = true }
+
+# database interfaces
+bytes = { workspace = true }
+eyre = { workspace = true }
+
+# metrics and monitoring
+metrics = { workspace = true }
+tracing = { workspace = true }
+
+# utility
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+
+tempfile = "3.8"
+
+[dev-dependencies]
+# testing
+proptest = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
+assert_matches = { workspace = true }
+
+# reth testing utils
+reth-primitives = { workspace = true, features = ["test-utils"] }
+reth-db-api = { workspace = true }
+
+[features]
+metrics = []
+
+[lints]
+workspace = true
