@@ -181,7 +181,7 @@ impl<'a, const WRITE: bool> DbTx for RocksTransaction<'a, WRITE> {
         let cf_ptr = self.get_cf::<T>()?;
 
         // Create a regular cursor first and handle the Result
-        let inner_cursor = RocksCursor::<'a, T, WRITE>::new(self.db.clone(), cf_ptr)?;
+        let inner_cursor = RocksCursor::new(self.db.clone(), cf_ptr)?;
         // Now wrap the successful cursor in the thread-safe wrapper
         Ok(ThreadSafeRocksCursor::new(inner_cursor))
     }
@@ -193,7 +193,7 @@ impl<'a, const WRITE: bool> DbTx for RocksTransaction<'a, WRITE> {
     {
         let cf_ptr = self.get_cf::<T>()?;
         // Create a regular cursor first and handle the Result
-        let inner_cursor = RocksDupCursor::new(self.db.clone(), cf_ptr)?;
+        let inner_cursor = RocksDupCursor::new(self.get_db_clone(), cf_ptr)?;
         // Now wrap the successful cursor in the thread-safe wrapper
         Ok(ThreadSafeRocksDupCursor::new(inner_cursor))
     }
@@ -343,7 +343,7 @@ impl<'a> DbTxMut for RocksTransaction<'a, true> {
     }
 }
 
-impl TableImporter for RocksTransaction<true> {
+impl<'a> TableImporter for RocksTransaction<'a, true> {
     fn import_table<T: Table, R: DbTx>(&self, source_tx: &R) -> Result<(), DatabaseError>
     where
         T::Key: Encode + Decode + Clone,
