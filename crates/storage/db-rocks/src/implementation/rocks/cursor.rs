@@ -1,5 +1,5 @@
 use super::dupsort::DupSortHelper;
-use crate::implementation::rocks::tx::CFPtr;
+// use crate::implementation::rocks::tx::CFPtr;
 use reth_db_api::{
     cursor::{
         DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW, DupWalker, RangeWalker,
@@ -8,16 +8,18 @@ use reth_db_api::{
     table::{Compress, Decode, Decompress, DupSort, Encode, Table},
     DatabaseError,
 };
-use rocksdb::{Direction, IteratorMode, ReadOptions, DB};
+use rocksdb::{BoundColumnFamily, ColumnFamily, Direction, IteratorMode, ReadOptions, DB};
 use std::ops::RangeBounds;
 use std::result::Result::Ok;
 use std::sync::{Arc, Mutex};
 use std::{marker::PhantomData, ops::Bound};
 
 /// RocksDB cursor implementation
-pub struct RocksCursor<T: Table, const WRITE: bool> {
+pub struct RocksCursor<'a, T: Table, const WRITE: bool> {
     db: Arc<DB>,
-    cf: CFPtr,
+    // cf: CFPtr,
+    // cf: Arc<BoundColumnFamily<'static>>,
+    cf: Arc<&'a ColumnFamily>,
     current_key_bytes: Mutex<Option<Vec<u8>>>,
     current_value_bytes: Mutex<Option<Vec<u8>>>,
     next_seek_key: Mutex<Option<Vec<u8>>>,
@@ -25,14 +27,14 @@ pub struct RocksCursor<T: Table, const WRITE: bool> {
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<T: Table, const WRITE: bool> RocksCursor<T, WRITE>
+impl<'a, T: Table, const WRITE: bool> RocksCursor<'a, T, WRITE>
 where
     T::Key: Encode + Decode + Clone,
 {
-    pub(crate) fn new(db: Arc<DB>, cf: CFPtr) -> Result<Self, DatabaseError> {
+    pub(crate) fn new(db: Arc<DB>, cf: &'a ColumnFamily) -> Result<Self, DatabaseError> {
         Ok(Self {
             db,
-            cf,
+            cf: Arc::new(cf),
             next_seek_key: Mutex::new(None),
             current_key_bytes: Mutex::new(None),
             current_value_bytes: Mutex::new(None),
@@ -42,17 +44,21 @@ where
     }
 
     /// Get the column family reference safely
+    // #[inline]
+    // fn get_cf(&self) -> &rocksdb::ColumnFamily {
+    //     // Safety: The cf_ptr is guaranteed to be valid as long as the DB is alive,
+    //     // and we hold an Arc to the DB
+    //     unsafe { &*self.cf }
+    // }
     #[inline]
-    fn get_cf(&self) -> &rocksdb::ColumnFamily {
-        // Safety: The cf_ptr is guaranteed to be valid as long as the DB is alive,
-        // and we hold an Arc to the DB
-        unsafe { &*self.cf }
+    fn get_cf(&self) -> &ColumnFamily {
+        &self.cf
     }
 
     /// Create a single-use iterator for a specific operation
     fn create_iterator(&self, mode: IteratorMode) -> rocksdb::DBIterator {
-        let cf = self.get_cf();
-        self.db.iterator_cf_opt(cf, ReadOptions::default(), mode)
+        // let cf = self.get_cf();
+        self.db.iterator_cf_opt(self.get_cf(), ReadOptions::default(), mode)
     }
 
     /// Get the current key/value pair
@@ -372,7 +378,7 @@ where
     }
 }
 
-impl<T: Table, const WRITE: bool> DbCursorRO<T> for RocksCursor<T, WRITE>
+impl<'a, T: Table, const WRITE: bool> DbCursorRO<T> for RocksCursor<'a, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -473,7 +479,7 @@ where
     }
 }
 
-impl<T: Table> DbCursorRW<T> for RocksCursor<T, true>
+impl<'a, T: Table> DbCursorRW<T> for RocksCursor<'a, T, true>
 where
     T::Key: Encode + Decode + Clone,
     T::Value: Compress + Decompress,
@@ -526,21 +532,21 @@ where
 }
 
 /// RocksDB duplicate cursor implementation
-pub struct RocksDupCursor<T: DupSort, const WRITE: bool> {
-    inner: RocksCursor<T, WRITE>,
+pub struct RocksDupCursor<'b, T: DupSort, const WRITE: bool> {
+    inner: RocksCursor<'b, T, WRITE>,
     current_key: Option<T::Key>,
 }
 
-impl<T: DupSort, const WRITE: bool> RocksDupCursor<T, WRITE>
+impl<'b, T: DupSort, const WRITE: bool> RocksDupCursor<'b, T, WRITE>
 where
     T::Key: Encode + Decode + Clone,
     T::SubKey: Encode + Decode + Clone,
 {
-    pub(crate) fn new(db: Arc<DB>, cf: CFPtr) -> Result<Self, DatabaseError> {
+    pub(crate) fn new(db: Arc<DB>, cf: &'static ColumnFamily) -> Result<Self, DatabaseError> {
         Ok(Self { inner: RocksCursor::new(db, cf)?, current_key: None })
     }
 }
-impl<T: DupSort, const WRITE: bool> DbCursorRO<T> for RocksDupCursor<T, WRITE>
+impl<'b, T: DupSort, const WRITE: bool> DbCursorRO<T> for RocksDupCursor<'b, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -679,7 +685,7 @@ where
     }
 }
 
-impl<T: DupSort, const WRITE: bool> DbDupCursorRO<T> for RocksDupCursor<T, WRITE>
+impl<'b, T: DupSort, const WRITE: bool> DbDupCursorRO<T> for RocksDupCursor<'b, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -767,7 +773,7 @@ where
     }
 }
 
-impl<T: DupSort> DbCursorRW<T> for RocksDupCursor<T, true>
+impl<'b, T: DupSort> DbCursorRW<T> for RocksDupCursor<'b, T, true>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Compress + Decompress,
@@ -790,7 +796,7 @@ where
     }
 }
 
-impl<T: DupSort> DbDupCursorRW<T> for RocksDupCursor<T, true>
+impl<'b, T: DupSort> DbDupCursorRW<T> for RocksDupCursor<'b, T, true>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Compress + Decompress,
@@ -817,19 +823,20 @@ where
     }
 }
 
-pub struct ThreadSafeRocksCursor<T: Table, const WRITE: bool> {
-    cursor: Mutex<RocksCursor<T, WRITE>>,
+pub struct ThreadSafeRocksCursor<'c, T: Table, const WRITE: bool> {
+    cursor: Mutex<RocksCursor<'c, T, WRITE>>,
     // Add a phantom data to ensure proper Send/Sync implementation
-    _marker: std::marker::PhantomData<*const ()>,
+    // _marker: std::marker::PhantomData<*const ()>,
 }
 
-impl<T: Table, const WRITE: bool> ThreadSafeRocksCursor<T, WRITE> {
-    pub fn new(cursor: RocksCursor<T, WRITE>) -> Self {
-        Self { cursor: Mutex::new(cursor), _marker: std::marker::PhantomData }
+impl<'c, T: Table, const WRITE: bool> ThreadSafeRocksCursor<'c, T, WRITE> {
+    pub fn new(cursor: RocksCursor<'c, T, WRITE>) -> Self {
+        // Self { cursor: Mutex::new(cursor), _marker: std::marker::PhantomData }
+        Self { cursor: Mutex::new(cursor) }
     }
 }
 
-impl<T: Table, const WRITE: bool> DbCursorRO<T> for ThreadSafeRocksCursor<T, WRITE>
+impl<'c, T: Table, const WRITE: bool> DbCursorRO<T> for ThreadSafeRocksCursor<'c, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -963,7 +970,7 @@ where
     }
 }
 
-impl<T: Table> DbCursorRW<T> for ThreadSafeRocksCursor<T, true>
+impl<'c, T: Table> DbCursorRW<T> for ThreadSafeRocksCursor<'c, T, true>
 where
     T::Key: Encode + Decode + Clone,
     T::Value: Compress + Decompress,
@@ -989,33 +996,34 @@ where
     }
 }
 
-unsafe impl<T: Table, const WRITE: bool> Send for ThreadSafeRocksCursor<T, WRITE>
-where
-    T::Key: Send,
-    T::Value: Send,
-{
-}
+// unsafe impl<T: Table, const WRITE: bool> Send for ThreadSafeRocksCursor<T, WRITE>
+// where
+//     T::Key: Send,
+//     T::Value: Send,
+// {
+// }
 
-unsafe impl<T: Table, const WRITE: bool> Sync for ThreadSafeRocksCursor<T, WRITE>
-where
-    T::Key: Sync,
-    T::Value: Sync,
-{
-}
+// unsafe impl<T: Table, const WRITE: bool> Sync for ThreadSafeRocksCursor<T, WRITE>
+// where
+//     T::Key: Sync,
+//     T::Value: Sync,
+// {
+// }
 
-pub struct ThreadSafeRocksDupCursor<T: DupSort, const WRITE: bool> {
-    cursor: Mutex<RocksDupCursor<T, WRITE>>,
+pub struct ThreadSafeRocksDupCursor<'d, T: DupSort, const WRITE: bool> {
+    cursor: Mutex<RocksDupCursor<'d, T, WRITE>>,
     // Add a phantom data to ensure proper Send/Sync implementation
-    _marker: std::marker::PhantomData<*const ()>,
+    // _marker: std::marker::PhantomData<*const ()>,
 }
 
-impl<T: DupSort, const WRITE: bool> ThreadSafeRocksDupCursor<T, WRITE> {
-    pub fn new(cursor: RocksDupCursor<T, WRITE>) -> Self {
-        Self { cursor: Mutex::new(cursor), _marker: std::marker::PhantomData }
+impl<'d, T: DupSort, const WRITE: bool> ThreadSafeRocksDupCursor<'d, T, WRITE> {
+    pub fn new(cursor: RocksDupCursor<'d, T, WRITE>) -> Self {
+        // Self { cursor: Mutex::new(cursor), _marker: std::marker::PhantomData }
+        Self { cursor: Mutex::new(cursor) }
     }
 }
 
-impl<T: DupSort, const WRITE: bool> DbCursorRO<T> for ThreadSafeRocksDupCursor<T, WRITE>
+impl<'d, T: DupSort, const WRITE: bool> DbCursorRO<T> for ThreadSafeRocksDupCursor<'d, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -1124,7 +1132,7 @@ where
     }
 }
 
-impl<T: DupSort, const WRITE: bool> DbDupCursorRO<T> for ThreadSafeRocksDupCursor<T, WRITE>
+impl<'d, T: DupSort, const WRITE: bool> DbDupCursorRO<T> for ThreadSafeRocksDupCursor<'d, T, WRITE>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Decompress,
@@ -1185,7 +1193,7 @@ where
     }
 }
 
-impl<T: DupSort> DbDupCursorRW<T> for ThreadSafeRocksDupCursor<T, true>
+impl<'d, T: DupSort> DbDupCursorRW<T> for ThreadSafeRocksDupCursor<'d, T, true>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Compress + Decompress,
@@ -1202,7 +1210,7 @@ where
     }
 }
 
-impl<T: DupSort> DbCursorRW<T> for ThreadSafeRocksDupCursor<T, true>
+impl<'d, T: DupSort> DbCursorRW<T> for ThreadSafeRocksDupCursor<'d, T, true>
 where
     T::Key: Encode + Decode + Clone + PartialEq,
     T::Value: Compress + Decompress,
@@ -1229,18 +1237,18 @@ where
     }
 }
 
-unsafe impl<T: DupSort, const WRITE: bool> Send for ThreadSafeRocksDupCursor<T, WRITE>
-where
-    T::Key: Send,
-    T::Value: Send,
-    T::SubKey: Send,
-{
-}
+// unsafe impl<T: DupSort, const WRITE: bool> Send for ThreadSafeRocksDupCursor<T, WRITE>
+// where
+//     T::Key: Send,
+//     T::Value: Send,
+//     T::SubKey: Send,
+// {
+// }
 
-unsafe impl<T: DupSort, const WRITE: bool> Sync for ThreadSafeRocksDupCursor<T, WRITE>
-where
-    T::Key: Sync,
-    T::Value: Sync,
-    T::SubKey: Sync,
-{
-}
+// unsafe impl<T: DupSort, const WRITE: bool> Sync for ThreadSafeRocksDupCursor<T, WRITE>
+// where
+//     T::Key: Sync,
+//     T::Value: Sync,
+//     T::SubKey: Sync,
+// {
+// }
