@@ -1,0 +1,40 @@
+[package]
+name = "mpt-db-comparison"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+reth-db = { workspace = true }
+reth-provider = { workspace = true }
+reth-primitives = { workspace = true }
+alloy-primitives = { workspace = true }
+reth-trie = { workspace = true }
+revm = { workspace = true }
+
+# For performance measurements
+criterion = "0.5"
+chrono = "0.4"
+rand = "0.8"
+tempfile = "3.3"
+hex = "0.4"
+
+# # DB dependencies
+# rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
+# libmdbx = { version = "0.2", default-features = false, features = [
+#     "unsafe",
+#     "options",
+# ] }
+
+# Utilities
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+rayon = "1.7"
+indicatif = "0.17"
+
+[[bin]]
+name = "mpt-db-comparison"
+path = "src/main.rs"
