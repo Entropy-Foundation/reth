@@ -50,25 +50,25 @@ fn main() -> Result<()> {
         "Root Calculation Time (s)",
     )?;
 
-    // // Run proof generation time benchmarks
-    // println!("\nRunning MPT proof generation time benchmarks");
-    // println!("-----------------------------------------");
+    // Run proof generation time benchmarks
+    println!("\nRunning MPT proof generation time benchmarks");
+    println!("-----------------------------------------");
 
-    // let mdbx_proof_gen_results =
-    //     proof_gen_time::benchmark_mdbx_proof_gen_time(ACCOUNT_COUNTS, ITERATIONS)?;
-    // let rocksdb_proof_gen_results =
-    //     proof_gen_time::benchmark_rocksdb_proof_gen_time(ACCOUNT_COUNTS, ITERATIONS)?;
+    let mdbx_proof_gen_results =
+        proof_gen_time::benchmark_mdbx_proof_gen_time(ACCOUNT_COUNTS, ITERATIONS)?;
+    let rocksdb_proof_gen_results =
+        proof_gen_time::benchmark_rocksdb_proof_gen_time(ACCOUNT_COUNTS, ITERATIONS)?;
 
-    // // Write proof generation time results to CSV
-    // write_results_to_csv(
-    //     "benchmark_results/proof_gen_time.csv",
-    //     &mdbx_proof_gen_results,
-    //     &rocksdb_proof_gen_results,
-    //     "Proof Generation Time (s)",
-    // )?;
+    // Write proof generation time results to CSV
+    write_results_to_csv(
+        "benchmark_results/proof_gen_time.csv",
+        &mdbx_proof_gen_results,
+        &rocksdb_proof_gen_results,
+        "Proof Generation Time (s)",
+    )?;
 
-    // println!("\nBenchmark completed! Results written to 'benchmark_results' directory.");
-    // println!("Please check the CSV files for detailed results.");
+    println!("\nBenchmark completed! Results written to 'benchmark_results' directory.");
+    println!("Please check the CSV files for detailed results.");
 
     Ok(())
 }

@@ -1,135 +1,209 @@
-// use alloy_primitives::{Address, Bytes, B256, U256};
-// use anyhow::Result;
-// use rand::prelude::StdRng;
-// use rand::{Rng, SeedableRng};
-// use reth_db::mdbx::{MdbxEnvironment, MdbxTransaction};
-// use reth_trie::{
-//     account::AccountTrie, db::mdbx::MdbxTrieStorage, proof::ProofGenerator, AccountTrieMut,
-//     HashedAccount, HashedStorage, Nibbles, StateRoot, StorageTrieMut, TrieStorage,
-// };
-// use std::time::Instant;
-// use tempfile::TempDir;
+use alloy_primitives::{keccak256, Address, B256, U256};
+use anyhow::Result;
+use reth_db::{mdbx, Database};
+use reth_trie::proof::Proof;
+// use std::path::Path;
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
 
-// /// Generate a random address
-// fn random_address(rng: &mut StdRng) -> Address {
-//     let mut bytes = [0u8; 20];
-//     rng.fill(&mut bytes[..]);
-//     Address::from(bytes)
-// }
+use crate::update_time::generate_test_post_state;
 
-// /// Generate a random B256 hash
-// fn random_hash(rng: &mut StdRng) -> B256 {
-//     let mut bytes = [0u8; 32];
-//     rng.fill(&mut bytes[..]);
-//     B256::from(bytes)
-// }
+/// Benchmark MPT proof generation time for MDBX implementation
+pub fn benchmark_mdbx_proof_gen_time(
+    account_counts: &[usize],
+    iterations: usize,
+) -> Result<Vec<(usize, Duration)>> {
+    let mut results = Vec::new();
 
-// /// Measure MPT proof generation time for MDBX implementation
-// pub fn benchmark_mdbx_proof_gen_time(
-//     account_counts: &[usize],
-//     iterations: usize,
-// ) -> Result<Vec<(usize, f64)>> {
-//     let mut results = Vec::new();
+    for &count in account_counts {
+        println!("Benchmarking MDBX proof generation time with {} accounts", count);
 
-//     for &count in account_counts {
-//         println!("Benchmarking MDBX proof generation time with {} accounts", count);
+        // Create temporary directory for database
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path();
 
-//         // Create temporary directory for database
-//         let tmp_dir = TempDir::new()?;
-//         let db_path = tmp_dir.path();
+        // Generate accounts and post state
+        let post_state = generate_test_post_state(count);
 
-//         // Initialize MDBX environment
-//         let env = MdbxEnvironment::open(db_path, None)?;
+        // Create a sampling of accounts to generate proofs for (about 10% of total)
+        let sample_count = std::cmp::max(1, count / 10);
+        let mut sample_addresses = Vec::with_capacity(sample_count);
+        for i in 0..sample_count {
+            let idx = (i * count / sample_count) % count;
+            let mut addr_bytes = [0u8; 20];
+            addr_bytes[0..8].copy_from_slice(&(idx as u64).to_be_bytes());
+            sample_addresses.push(Address::from(addr_bytes));
+        }
 
-//         // Create transaction and populate trie
-//         let mut addresses = Vec::new();
-//         {
-//             let txn = env.begin_mutable_txn()?;
-//             let mut db = MdbxTrieStorage::new(txn);
+        // First populate the database with accounts
+        {
+            // Create the database with proper arguments
+            let db = mdbx::init_db(
+                db_path,
+                mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
+            )
+            .unwrap();
 
-//             // Generate random accounts
-//             let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-//             let accounts: Vec<_> = (0..count)
-//                 .map(|_| {
-//                     let address = random_address(&mut rng);
-//                     addresses.push(address); // Store addresses for later proof generation
+            // Get a transaction for updates
+            let tx_mut = db.tx_mut().unwrap();
 
-//                     let balance = U256::from(rng.gen_range(0..100000));
-//                     let nonce = rng.gen_range(0..1000);
-//                     let code_hash = random_hash(&mut rng);
+            // Convert post state to a format suitable for the trie
+            let post_state_clone = post_state.clone();
+            let prefix_sets = post_state_clone.construct_prefix_sets();
+            let frozen_sets = prefix_sets.freeze();
+            let state_sorted = post_state_clone.into_sorted();
 
-//                     (address, HashedAccount { balance, nonce, bytecode_hash: Some(code_hash) })
-//                 })
-//                 .collect();
+            // Calculate state root with updates (this will update the trie)
+            let (root, updates) = reth_trie::StateRoot::new(
+                reth_trie_db::DatabaseTrieCursorFactory::new(&tx_mut),
+                reth_trie::hashed_cursor::HashedPostStateCursorFactory::new(
+                    reth_trie_db::DatabaseHashedCursorFactory::new(&tx_mut),
+                    &state_sorted,
+                ),
+            )
+            .with_prefix_sets(frozen_sets)
+            .root_with_updates()
+            .unwrap();
 
-//             // Create account trie and insert accounts
-//             let mut trie = AccountTrie::new(db.account_storage());
-//             for (address, account) in accounts {
-//                 trie.insert(address, account)?;
-//             }
+            // Commit the transaction
+            tx_mut.inner.commit().unwrap();
 
-//             // Commit changes
-//             db.commit()?;
-//         }
+            println!("Initial state root: {}", root);
+        }
 
-//         // Select a subset of addresses for proof generation (10% of total)
-//         let proof_keys_count = std::cmp::max(1, count / 10);
-//         let mut rng = StdRng::seed_from_u64(100);
-//         let proof_addresses: Vec<_> = addresses
-//             .iter()
-//             .enumerate()
-//             .filter(|(i, _)| i % (count / proof_keys_count) == 0)
-//             .map(|(_, addr)| *addr)
-//             .collect();
+        let mut durations = Vec::with_capacity(iterations);
 
-//         println!("  Generating proofs for {} addresses", proof_addresses.len());
+        // Now benchmark proof generation time
+        for i in 0..iterations {
+            println!("  Iteration {}/{}", i + 1, iterations);
 
-//         // Measure proof generation time across multiple iterations
-//         let mut total_duration = 0.0;
+            // Open the database for reading
+            let db = mdbx::open_db(
+                db_path,
+                mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
+            )
+            .unwrap();
 
-//         for i in 0..iterations {
-//             println!("  Iteration {}/{}", i + 1, iterations);
+            // Get a transaction for reading
+            let tx = db.tx().unwrap();
 
-//             // Create read transaction
-//             let txn = env.begin_txn()?;
-//             let db = MdbxTrieStorage::new(txn);
+            // Measure proof generation time
+            let start = Instant::now();
 
-//             // Measure proof generation time
-//             let start = Instant::now();
+            // Generate proofs for sample addresses
+            for address in &sample_addresses {
+                // Create proof generator for each address
+                let proof_generator = Proof::new(
+                    reth_trie_db::DatabaseTrieCursorFactory::new(&tx),
+                    reth_trie_db::DatabaseHashedCursorFactory::new(&tx),
+                );
 
-//             // Generate proof for each selected address
-//             let mut proof_generator = ProofGenerator::new(db.account_storage());
-//             for address in &proof_addresses {
-//                 let proof = proof_generator.generate_account_proof(*address)?;
-//                 // Verify the proof is not empty
-//                 assert!(!proof.is_empty(), "Generated empty proof");
-//             }
+                let _proof = proof_generator.account_proof(*address, &[]).unwrap();
+                // Verify the proof contains data
+                assert!(!_proof.proof.is_empty(), "Proof should not be empty");
+            }
 
-//             let duration = start.elapsed();
-//             total_duration += duration.as_secs_f64();
+            let duration = start.elapsed();
+            durations.push(duration);
 
-//             println!("    Completed in {:.2}s", duration.as_secs_f64());
-//         }
+            println!("    Completed in {:?}", duration);
+        }
 
-//         let avg_duration = total_duration / iterations as f64;
-//         results.push((count, avg_duration));
+        // Calculate average duration
+        let total_duration: Duration = durations.iter().sum();
+        let avg_duration = total_duration / iterations as u32;
 
-//         println!("Average proof generation time for {} accounts: {:.2}s", count, avg_duration);
-//     }
+        results.push((count, avg_duration));
+        println!("Average proof generation time for {} accounts: {:?}", count, avg_duration);
+    }
 
-//     Ok(results)
-// }
+    Ok(results)
+}
 
-// /// Measure MPT proof generation time for RocksDB implementation
-// pub fn benchmark_rocksdb_proof_gen_time(
-//     account_counts: &[usize],
-//     iterations: usize,
-// ) -> Result<Vec<(usize, f64)>> {
-//     // Note: This is a placeholder for the RocksDB implementation
-//     // The actual implementation would be similar to the MDBX version but using RocksDB
-//     println!("RocksDB benchmark - implementation will be similar to MDBX but with RocksDB backend");
+/// Benchmark MPT proof generation time for RocksDB implementation
+pub fn benchmark_rocksdb_proof_gen_time(
+    account_counts: &[usize],
+    iterations: usize,
+) -> Result<Vec<(usize, Duration)>> {
+    let mut results = Vec::new();
 
-//     // This would be replaced with actual RocksDB implementation
-//     let results = account_counts.iter().map(|&count| (count, 0.0)).collect();
-//     Ok(results)
-// }
+    // for &count in account_counts {
+    //     println!("Benchmarking RocksDB proof generation time with {} accounts", count);
+
+    //     // Create temporary directory for database
+    //     let temp_dir = TempDir::new().unwrap();
+    //     let db_path = temp_dir.path();
+
+    //     // Generate accounts and post state
+    //     let post_state = generate_test_post_state(count);
+
+    //     // Create a sampling of accounts to generate proofs for (about 10% of total)
+    //     let sample_count = std::cmp::max(1, count / 10);
+    //     let mut sample_addresses = Vec::with_capacity(sample_count);
+    //     for i in 0..sample_count {
+    //         let idx = (i * count / sample_count) % count;
+    //         let mut addr_bytes = [0u8; 20];
+    //         addr_bytes[0..8].copy_from_slice(&(idx as u64).to_be_bytes());
+    //         sample_addresses.push(Address::from(addr_bytes));
+    //     }
+
+    //     // Create RocksDB
+    //     let db = reth_db::test_utils::create_test_db_at_path(db_path).0;
+
+    //     // First populate the database with accounts
+    //     {
+    //         let read_tx =
+    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+    //         let write_tx =
+    //             implementation::rocks::tx::RocksTransaction::<true>::new(db.clone(), true);
+
+    //         // Insert all accounts first
+    //         let _root = implementation::rocks::calculate_state_root_with_updates(
+    //             &read_tx, &write_tx, post_state,
+    //         )
+    //         .unwrap();
+
+    //         // Commit transaction
+    //         write_tx.commit().unwrap();
+    //     }
+
+    //     let mut durations = Vec::with_capacity(iterations);
+
+    //     // Now benchmark proof generation time
+    //     for i in 0..iterations {
+    //         println!("  Iteration {}/{}", i + 1, iterations);
+
+    //         // Create a read-only transaction
+    //         let read_tx =
+    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+
+    //         // Create proof generator
+    //         let proof_generator =
+    //             Proof::new(read_tx.trie_cursor_factory(), read_tx.hashed_cursor_factory());
+
+    //         // Measure proof generation time
+    //         let start = Instant::now();
+
+    //         // Generate proofs for sample addresses
+    //         for address in &sample_addresses {
+    //             let _proof = proof_generator.account_proof(*address, &[]).unwrap();
+    //             // Verify the proof contains data
+    //             assert!(!_proof.proof.is_empty(), "Proof should not be empty");
+    //         }
+
+    //         let duration = start.elapsed();
+    //         durations.push(duration);
+
+    //         println!("    Completed in {:?}", duration);
+    //     }
+
+    //     // Calculate average duration
+    //     let total_duration: Duration = durations.iter().sum();
+    //     let avg_duration = total_duration / iterations as u32;
+
+    //     results.push((count, avg_duration));
+    //     println!("Average proof generation time for {} accounts: {:?}", count, avg_duration);
+    // }
+
+    Ok(results)
+}
