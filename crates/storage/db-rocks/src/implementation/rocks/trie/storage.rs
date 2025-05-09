@@ -9,13 +9,13 @@ use reth_db_api::{
     transaction::DbTx,
     DatabaseError,
 };
-#[cfg(feature = "metrics")]
-use reth_trie::metrics::{TrieRootMetrics, TrieType};
 use reth_trie::{
     hashed_cursor::HashedPostStateCursorFactory, trie_cursor::InMemoryTrieCursorFactory,
     updates::TrieUpdates, BranchNodeCompact, HashedPostState, KeccakKeyHasher, StateRoot,
     StateRootProgress, StorageRoot, StoredNibbles, TrieInput,
 };
+#[cfg(feature = "metrics")]
+use reth_trie::{metrics::TrieRootMetrics, TrieType};
 use reth_trie_db::{
     DatabaseHashedCursorFactory, DatabaseStateRoot, DatabaseStorageRoot, DatabaseTrieCursorFactory,
     PrefixSetLoader,

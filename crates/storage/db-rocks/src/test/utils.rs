@@ -11,7 +11,7 @@ use rocksdb::{Options, DB};
 use std::sync::Arc;
 use tempfile::TempDir;
 
-pub(super) fn create_test_db() -> (Arc<DB>, TempDir) {
+pub fn create_test_db() -> (Arc<DB>, TempDir) {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
@@ -41,7 +41,7 @@ pub(super) fn create_test_db() -> (Arc<DB>, TempDir) {
     (Arc::new(db), temp_dir)
 }
 
-pub(super) fn setup_test_state(
+pub fn setup_test_state(
     read_tx: &RocksTransaction<false>,
     write_tx: &RocksTransaction<true>,
 ) -> (B256, Address, Address, B256) {
@@ -88,7 +88,7 @@ fn create_trie_node_value(nibbles_str: &str, node_hash: B256) -> TrieNodeValue {
     TrieNodeValue { nibbles: StoredNibbles(nibbles), node: node_hash }
 }
 
-pub(crate) fn create_test_branch_node() -> BranchNodeCompact {
+pub fn create_test_branch_node() -> BranchNodeCompact {
     let state_mask = TrieMask::new(0);
     let tree_mask = TrieMask::new(0);
     let hash_mask = TrieMask::new(0);

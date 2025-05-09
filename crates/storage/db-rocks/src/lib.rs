@@ -67,6 +67,7 @@ pub use implementation::rocks::trie::{calculate_state_root, calculate_state_root
 pub use implementation::rocks::tx::RocksTransaction;
 pub use reth_primitives_traits::Account;
 pub use reth_trie::HashedPostState;
+pub use test::utils;
 
 // /*
 // > This codebase implements a RocksDB storage layer for RETH. At its core, it provides a way to store and retrieve blockchain data using RocksDB instead of MDBX. The implementation handles database operations through tables (like accounts, transactions, etc.) where each table is a separate column family in RocksDB.
