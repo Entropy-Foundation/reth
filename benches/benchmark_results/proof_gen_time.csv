@@ -1,0 +1,6 @@
+Account Count,MDBX Proof Generation Time (s) (s),RocksDB Proof Generation Time (s) (s),Speedup
+10000,89.257,0.000000,0.00x
+50000,438.915,0.000000,0.00x
+100000,882.835,0.000000,0.00x
+200000,1756.568,0.000000,0.00x
+500000,4409.961,0.000000,0.00x
