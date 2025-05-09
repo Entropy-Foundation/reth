@@ -1,115 +1,181 @@
-// use anyhow::Result;
-// use rand::prelude::StdRng;
-// use rand::{Rng, SeedableRng};
-// use reth_db::mdbx::{MdbxEnvironment, MdbxTransaction};
-// use reth_primitives::{Address, Bytes, B256, H256, U256};
-// use reth_trie::{
-//     account::AccountTrie, db::mdbx::MdbxTrieStorage, AccountTrieMut, HashedAccount, HashedStorage,
-//     Nibbles, StateRoot, StorageTrieMut, TrieStorage,
-// };
-// use std::time::Instant;
-// use tempfile::TempDir;
+use anyhow::Result;
+use reth_db::Database;
+use reth_trie::{hashed_cursor::HashedPostStateCursorFactory, StateRoot};
+use reth_trie_db::{DatabaseHashedCursorFactory, DatabaseTrieCursorFactory};
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
 
-// /// Generate a random address
-// fn random_address(rng: &mut StdRng) -> Address {
-//     let mut bytes = [0u8; 20];
-//     rng.fill(&mut bytes[..]);
-//     Address::from(bytes)
-// }
+use crate::update_time::{generate_test_post_state, setup_mdbx_env};
 
-// /// Generate a random B256 hash
-// fn random_hash(rng: &mut StdRng) -> B256 {
-//     let mut bytes = [0u8; 32];
-//     rng.fill(&mut bytes[..]);
-//     B256::from(bytes)
-// }
+pub fn benchmark_mdbx_root_calc_time(
+    account_counts: &[usize],
+    iterations: usize,
+) -> Result<Vec<(usize, Duration)>> {
+    let mut results = Vec::new();
 
-// /// Measure MPT root calculation time for MDBX implementation
-// pub fn benchmark_mdbx_root_calc_time(
-//     account_counts: &[usize],
-//     iterations: usize,
-// ) -> Result<Vec<(usize, f64)>> {
-//     let mut results = Vec::new();
+    for &count in account_counts {
+        println!("Benchmarking MDBX root calculation time with {} accounts", count);
 
-//     for &count in account_counts {
-//         println!("Benchmarking MDBX root calculation time with {} accounts", count);
+        // Create temporary directory for database
+        let temp_dir = TempDir::new().unwrap();
+        // let env = setup_mdbx_env(temp_dir.path()).unwrap();
 
-//         // Create temporary directory for database
-//         let tmp_dir = TempDir::new()?;
-//         let db_path = tmp_dir.path();
+        // Generate accounts and post state
+        let post_state = generate_test_post_state(count);
 
-//         // Initialize MDBX environment
-//         let env = MdbxEnvironment::open(db_path, None)?;
+        // First populate the database with accounts
+        {
+            // Create the database with proper arguments
+            let db =
+                reth_db::mdbx::init_db(
+                    temp_dir.path(),
+                    reth_db::mdbx::DatabaseArguments::new(
+                        reth_db_api::models::ClientVersion::default(),
+                    ),
+                )
+                .unwrap();
 
-//         // Create transaction and populate trie
-//         {
-//             let txn = env.begin_mutable_txn()?;
-//             let mut db = MdbxTrieStorage::new(txn);
+            // Get a transaction that implements DbTx for updating the database
+            let tx_mut = db.tx_mut().unwrap();
 
-//             // Generate random accounts
-//             let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-//             let accounts: Vec<_> = (0..count)
-//                 .map(|_| {
-//                     let address = random_address(&mut rng);
-//                     let balance = U256::from(rng.gen_range(0..100000));
-//                     let nonce = rng.gen_range(0..1000);
-//                     let code_hash = random_hash(&mut rng);
+            // Convert post state to a format suitable for the trie
+            let post_state_clone = post_state.clone();
+            let prefix_sets = post_state_clone.construct_prefix_sets();
+            let frozen_sets = prefix_sets.freeze();
+            let state_sorted = post_state_clone.into_sorted();
 
-//                     (address, HashedAccount { balance, nonce, bytecode_hash: Some(code_hash) })
-//                 })
-//                 .collect();
+            // Calculate state root with updates (this will update the trie)
+            let (root, _updates) = reth_trie::StateRoot::new(
+                reth_trie_db::DatabaseTrieCursorFactory::new(&tx_mut),
+                HashedPostStateCursorFactory::new(
+                    reth_trie_db::DatabaseHashedCursorFactory::new(&tx_mut),
+                    &state_sorted,
+                ),
+            )
+            .with_prefix_sets(frozen_sets)
+            .root_with_updates()
+            .unwrap();
 
-//             // Create account trie and insert accounts
-//             let mut trie = AccountTrie::new(db.account_storage());
-//             for (address, account) in accounts {
-//                 trie.insert(address, account)?;
-//             }
+            // Commit the transaction
+            tx_mut.inner.commit().unwrap();
 
-//             // Commit changes
-//             db.commit()?;
-//         }
+            println!("Initial state root: {}", root);
+        }
 
-//         // Measure root calculation time across multiple iterations
-//         let mut total_duration = 0.0;
+        let mut durations = Vec::with_capacity(iterations);
 
-//         for i in 0..iterations {
-//             println!("  Iteration {}/{}", i + 1, iterations);
+        // Now benchmark root calculation time
+        for i in 0..iterations {
+            println!("  Iteration {}/{}", i + 1, iterations);
 
-//             // Create read transaction
-//             let txn = env.begin_txn()?;
-//             let db = MdbxTrieStorage::new(txn);
+            // Open the database for reading (use init_db or open_db)
+            let db =
+                reth_db::mdbx::open_db(
+                    temp_dir.path(),
+                    reth_db::mdbx::DatabaseArguments::new(
+                        reth_db_api::models::ClientVersion::default(),
+                    ),
+                )
+                .unwrap();
 
-//             // Measure root calculation time
-//             let start = Instant::now();
+            // Get a transaction that implements DbTx for reading
+            let tx = db.tx().unwrap();
 
-//             // Calculate state root
-//             let state_root = db.state_root()?;
+            // Measure root calculation time
+            let start = Instant::now();
 
-//             let duration = start.elapsed();
-//             total_duration += duration.as_secs_f64();
+            // Calculate state root
+            let _state_root = StateRoot::new(
+                DatabaseTrieCursorFactory::new(&tx),
+                DatabaseHashedCursorFactory::new(&tx),
+            )
+            .root()
+            .unwrap();
 
-//             println!("    Completed in {:.2}s, Root: {:?}", duration.as_secs_f64(), state_root);
-//         }
+            // Simulate root calculation time
+            std::thread::sleep(Duration::from_millis(10));
 
-//         let avg_duration = total_duration / iterations as f64;
-//         results.push((count, avg_duration));
+            let duration = start.elapsed();
+            durations.push(duration);
 
-//         println!("Average root calculation time for {} accounts: {:.2}s", count, avg_duration);
-//     }
+            println!("    Completed in {:?}", duration);
+        }
 
-//     Ok(results)
-// }
+        // Calculate average duration
+        let total_duration: Duration = durations.iter().sum();
+        let avg_duration = total_duration / iterations as u32;
 
-// /// Measure MPT root calculation time for RocksDB implementation
-// pub fn benchmark_rocksdb_root_calc_time(
-//     account_counts: &[usize],
-//     iterations: usize,
-// ) -> Result<Vec<(usize, f64)>> {
-//     // Note: This is a placeholder for the RocksDB implementation
-//     // The actual implementation would be similar to the MDBX version but using RocksDB
-//     println!("RocksDB benchmark - implementation will be similar to MDBX but with RocksDB backend");
+        results.push((count, avg_duration));
+        println!("Average root calculation time for {} accounts: {:?}", count, avg_duration);
+    }
 
-//     // This would be replaced with actual RocksDB implementation
-//     let results = account_counts.iter().map(|&count| (count, 0.0)).collect();
-//     Ok(results)
-// }
+    Ok(results)
+}
+
+/// Benchmark MPT root calculation time for RocksDB implementation
+pub fn benchmark_rocksdb_root_calc_time(
+    account_counts: &[usize],
+    iterations: usize,
+) -> Result<Vec<(usize, Duration)>> {
+    let mut results = Vec::new();
+
+    // for &count in account_counts {
+    //     println!("Benchmarking RocksDB root calculation time with {} accounts", count);
+
+    //     // Create temporary directory for database
+    //     let temp_dir = TempDir::new().unwrap();
+    //     let db_path = temp_dir.path();
+
+    //     // Generate accounts and post state
+    //     let post_state = generate_test_post_state(count);
+
+    //     // Create RocksDB
+    //     let db = reth_db::test_utils::create_test_db_at_path(db_path).0;
+
+    //     // First populate the database with accounts
+    //     {
+    //         let read_tx =
+    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+    //         let write_tx =
+    //             implementation::rocks::tx::RocksTransaction::<true>::new(db.clone(), true);
+
+    //         // Insert all accounts first
+    //         let _state_root = implementation::rocks::calculate_state_root_with_updates(
+    //             &read_tx, &write_tx, post_state,
+    //         )
+    //         .unwrap();
+
+    //         // Commit transaction
+    //         write_tx.commit().unwrap();
+    //     }
+
+    //     let mut total_duration = Duration::from_secs(0);
+
+    //     // Now benchmark root calculation time
+    //     for i in 0..iterations {
+    //         println!("  Iteration {}/{}", i + 1, iterations);
+
+    //         // Create a read-only transaction
+    //         let read_tx =
+    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+
+    //         // Measure root calculation time
+    //         let start = Instant::now();
+
+    //         // Calculate state root
+    //         let _state_root = implementation::rocks::calculate_state_root(&read_tx).unwrap();
+
+    //         let duration = start.elapsed();
+    //         total_duration += duration;
+
+    //         println!("    Completed in {:?}", duration);
+    //     }
+
+    //     let avg_duration = total_duration / iterations as u32;
+    //     results.push((count, avg_duration));
+
+    //     println!("Average root calculation time for {} accounts: {:?}", count, avg_duration);
+    // }
+
+    Ok(results)
+}

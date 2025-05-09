@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, time::Duration};
 
 mod proof_gen_time;
 mod root_calc_time;
@@ -33,22 +33,22 @@ fn main() -> Result<()> {
         "Update Time (s)",
     )?;
 
-    // // Run root calculation time benchmarks
-    // println!("\nRunning MPT root calculation time benchmarks");
-    // println!("-----------------------------------------");
+    // Run root calculation time benchmarks
+    println!("\nRunning MPT root calculation time benchmarks");
+    println!("-----------------------------------------");
 
-    // let mdbx_root_calc_results =
-    //     root_calc_time::benchmark_mdbx_root_calc_time(ACCOUNT_COUNTS, ITERATIONS)?;
-    // let rocksdb_root_calc_results =
-    //     root_calc_time::benchmark_rocksdb_root_calc_time(ACCOUNT_COUNTS, ITERATIONS)?;
+    let mdbx_root_calc_results =
+        root_calc_time::benchmark_mdbx_root_calc_time(ACCOUNT_COUNTS, ITERATIONS)?;
+    let rocksdb_root_calc_results =
+        root_calc_time::benchmark_rocksdb_root_calc_time(ACCOUNT_COUNTS, ITERATIONS)?;
 
-    // // Write root calculation time results to CSV
-    // write_results_to_csv(
-    //     "benchmark_results/root_calc_time.csv",
-    //     &mdbx_root_calc_results,
-    //     &rocksdb_root_calc_results,
-    //     "Root Calculation Time (s)",
-    // )?;
+    // Write root calculation time results to CSV
+    write_results_to_csv(
+        "benchmark_results/root_calc_time.csv",
+        &mdbx_root_calc_results,
+        &rocksdb_root_calc_results,
+        "Root Calculation Time (s)",
+    )?;
 
     // // Run proof generation time benchmarks
     // println!("\nRunning MPT proof generation time benchmarks");
@@ -76,8 +76,8 @@ fn main() -> Result<()> {
 /// Write benchmark results to a CSV file
 fn write_results_to_csv(
     filename: &str,
-    mdbx_results: &[(usize, f64)],
-    rocksdb_results: &[(usize, f64)],
+    mdbx_results: &[(usize, Duration)],
+    rocksdb_results: &[(usize, Duration)],
     metric_name: &str,
 ) -> Result<()> {
     // Create full path and ensure parent directories exist
@@ -98,12 +98,15 @@ fn write_results_to_csv(
             .iter()
             .find(|(count, _)| *count == account_count)
             .map(|(_, time)| *time)
-            .unwrap_or(0.0);
+            .unwrap_or(Duration::from_secs(0));
 
-        let speedup =
-            if rocksdb_time > 0.0 && mdbx_time > 0.0 { mdbx_time / rocksdb_time } else { 0.0 };
+        // Convert durations to milliseconds
+        let mdbx_ms = mdbx_time.as_secs_f64() * 1000.0;
+        let rocksdb_ms = rocksdb_time.as_secs_f64() * 1000.0;
 
-        writeln!(file, "{},{:.6},{:.6},{:.2}x", account_count, mdbx_time, rocksdb_time, speedup)?;
+        let speedup = if rocksdb_ms > 0.0 && mdbx_ms > 0.0 { mdbx_ms / rocksdb_ms } else { 0.0 };
+
+        writeln!(file, "{},{:.3},{:.6},{:.2}x", account_count, mdbx_ms, rocksdb_ms, speedup)?;
     }
 
     println!("Results written to {}", filename);
