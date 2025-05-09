@@ -9,6 +9,8 @@ reth-provider = { workspace = true }
 reth-primitives = { workspace = true }
 alloy-primitives = { workspace = true }
 reth-trie = { workspace = true }
+reth-trie-db = { workspace = true }
+reth-db-api = { workspace = true }
 revm = { workspace = true }
 
 # For performance measurements
