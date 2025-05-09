@@ -8,9 +8,10 @@ reth-db = { workspace = true }
 reth-provider = { workspace = true }
 reth-primitives = { workspace = true }
 alloy-primitives = { workspace = true }
-reth-trie = { workspace = true }
+reth-trie = { workspace = true, default-features = false }
 reth-trie-db = { workspace = true }
 reth-db-api = { workspace = true }
+reth-db-rocks = { workspace = true, default-features = false }
 revm = { workspace = true }
 
 # For performance measurements
@@ -19,13 +20,6 @@ chrono = "0.4"
 rand = "0.8"
 tempfile = "3.3"
 hex = "0.4"
-
-# # DB dependencies
-# rocksdb = { version = "0.21", features = ["multi-threaded-cf"] }
-# libmdbx = { version = "0.2", default-features = false, features = [
-#     "unsafe",
-#     "options",
-# ] }
 
 # Utilities
 tracing = "0.1"

@@ -5748,6 +5748,7 @@ dependencies = [
  "rayon",
  "reth-db",
  "reth-db-api",
+ "reth-db-rocks",
  "reth-primitives",
  "reth-provider",
  "reth-trie",

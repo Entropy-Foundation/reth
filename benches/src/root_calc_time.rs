@@ -119,63 +119,63 @@ pub fn benchmark_rocksdb_root_calc_time(
 ) -> Result<Vec<(usize, Duration)>> {
     let mut results = Vec::new();
 
-    // for &count in account_counts {
-    //     println!("Benchmarking RocksDB root calculation time with {} accounts", count);
-
-    //     // Create temporary directory for database
-    //     let temp_dir = TempDir::new().unwrap();
-    //     let db_path = temp_dir.path();
-
-    //     // Generate accounts and post state
-    //     let post_state = generate_test_post_state(count);
-
-    //     // Create RocksDB
-    //     let db = reth_db::test_utils::create_test_db_at_path(db_path).0;
-
-    //     // First populate the database with accounts
-    //     {
-    //         let read_tx =
-    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
-    //         let write_tx =
-    //             implementation::rocks::tx::RocksTransaction::<true>::new(db.clone(), true);
-
-    //         // Insert all accounts first
-    //         let _state_root = implementation::rocks::calculate_state_root_with_updates(
-    //             &read_tx, &write_tx, post_state,
-    //         )
-    //         .unwrap();
-
-    //         // Commit transaction
-    //         write_tx.commit().unwrap();
-    //     }
-
-    //     let mut total_duration = Duration::from_secs(0);
-
-    //     // Now benchmark root calculation time
-    //     for i in 0..iterations {
-    //         println!("  Iteration {}/{}", i + 1, iterations);
-
-    //         // Create a read-only transaction
-    //         let read_tx =
-    //             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
-
-    //         // Measure root calculation time
-    //         let start = Instant::now();
-
-    //         // Calculate state root
-    //         let _state_root = implementation::rocks::calculate_state_root(&read_tx).unwrap();
-
-    //         let duration = start.elapsed();
-    //         total_duration += duration;
-
-    //         println!("    Completed in {:?}", duration);
-    //     }
-
-    //     let avg_duration = total_duration / iterations as u32;
-    //     results.push((count, avg_duration));
-
-    //     println!("Average root calculation time for {} accounts: {:?}", count, avg_duration);
-    // }
-
     Ok(results)
 }
+
+// for &count in account_counts {
+//     println!("Benchmarking RocksDB root calculation time with {} accounts", count);
+
+//     // Create temporary directory for database
+//     let temp_dir = TempDir::new().unwrap();
+//     let db_path = temp_dir.path();
+
+//     // Generate accounts and post state
+//     let post_state = generate_test_post_state(count);
+
+//     // Create RocksDB
+//     let db = reth_db::test_utils::create_test_db_at_path(db_path).0;
+
+//     // First populate the database with accounts
+//     {
+//         let read_tx =
+//             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+//         let write_tx =
+//             implementation::rocks::tx::RocksTransaction::<true>::new(db.clone(), true);
+
+//         // Insert all accounts first
+//         let _state_root = implementation::rocks::calculate_state_root_with_updates(
+//             &read_tx, &write_tx, post_state,
+//         )
+//         .unwrap();
+
+//         // Commit transaction
+//         write_tx.commit().unwrap();
+//     }
+
+//     let mut total_duration = Duration::from_secs(0);
+
+//     // Now benchmark root calculation time
+//     for i in 0..iterations {
+//         println!("  Iteration {}/{}", i + 1, iterations);
+
+//         // Create a read-only transaction
+//         let read_tx =
+//             implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
+
+//         // Measure root calculation time
+//         let start = Instant::now();
+
+//         // Calculate state root
+//         let _state_root = implementation::rocks::calculate_state_root(&read_tx).unwrap();
+
+//         let duration = start.elapsed();
+//         total_duration += duration;
+
+//         println!("    Completed in {:?}", duration);
+//     }
+
+//     let avg_duration = total_duration / iterations as u32;
+//     results.push((count, avg_duration));
+
+//     println!("Average root calculation time for {} accounts: {:?}", count, avg_duration);
+// }

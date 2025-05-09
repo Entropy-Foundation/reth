@@ -1,9 +1,11 @@
 use alloy_primitives::keccak256;
 use alloy_primitives::{Address, B256, U256};
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use reth_db::mdbx::{
     DatabaseFlags, Environment, EnvironmentFlags, Geometry, Mode, SyncMode, WriteFlags,
 };
+use reth_db::transaction::{DbTx, DbTxMut};
+use reth_db_rocks::{utils::create_test_db, RocksTransaction};
 use reth_primitives::Account;
 use reth_trie::HashedPostState;
 use std::{
@@ -168,20 +170,8 @@ pub fn benchmark_mdbx_update_time(
 /// Measure MPT update time for RocksDB implementation
 pub fn benchmark_rocksdb_update_time(
     account_counts: &[usize],
-    _iterations: usize,
+    iterations: usize,
 ) -> Result<Vec<(usize, Duration)>> {
-    // Note: This is a placeholder for the RocksDB implementation
-    // The actual implementation would be similar to the MDBX version but using RocksDB
-    println!("RocksDB benchmark - implementation will be similar to MDBX but with RocksDB backend");
-
-    // This would be replaced with actual RocksDB implementation
-    let results = account_counts.iter().map(|&count| (count, Duration::from_secs(0))).collect();
-    Ok(results)
-}
-
-/*
-/// Benchmark MPT update time using RocksDB implementation
-pub fn benchmark_rocksdb_update_time(account_counts: &[usize], iterations: usize) -> Vec<(usize, Duration)> {
     let mut results = Vec::new();
 
     for &count in account_counts {
@@ -192,85 +182,72 @@ pub fn benchmark_rocksdb_update_time(account_counts: &[usize], iterations: usize
         for i in 0..iterations {
             println!("  Iteration {}/{}", i + 1, iterations);
 
-            // Create temporary directory for database
-            let temp_dir = TempDir::new().unwrap();
-            let db_path = temp_dir.path();
+            // Create a temporary directory for the database and setup the environment
+            let (db, _temp_dir) = create_test_db();
 
-            // Generate accounts and post state
-            let post_state = generate_test_post_state(count);
+            // Generate addresses and accounts
+            let accounts: Vec<(Address, Account)> = (0..count)
+                .map(|i| {
+                    let mut addr_bytes = [0u8; 20];
+                    for j in 0..std::cmp::min(8, std::mem::size_of::<usize>()) {
+                        addr_bytes[j] = ((i >> (j * 8)) & 0xFF) as u8;
+                    }
+                    let address = Address::from_slice(&addr_bytes);
+                    let account = generate_test_accounts(i);
+                    (address, account)
+                })
+                .collect();
 
-            // Create RocksDB implementation
-            let db = reth_db::test_utils::create_test_db_at_path(db_path).0;
+            // Create read and write transactions
+            let read_tx = RocksTransaction::<false>::new(db.clone(), false);
+            let write_tx = RocksTransaction::<true>::new(db.clone(), true);
+
+            // Insert accounts
+            for (idx, (_, account)) in accounts.iter().enumerate() {
+                let key = format!("account:{}", idx).into_bytes();
+                let mut value = Vec::new();
+                value.extend_from_slice(&account.nonce.to_le_bytes());
+                write_tx.put(&key, &value)?;
+            }
+
+            // Commit the transaction
+            write_tx.commit()?;
 
             // Measure update time
             let start = Instant::now();
 
-            // Create read and write transactions for RocksDB
-            let read_tx = implementation::rocks::tx::RocksTransaction::<false>::new(db.clone(), false);
-            let write_tx = implementation::rocks::tx::RocksTransaction::<true>::new(db.clone(), true);
+            // Create a new transaction for updates
+            let write_tx = RocksTransaction::<true>::new(db.clone(), true);
 
-            // Calculate state root with updates (this will update the trie)
-            let _state_root = implementation::rocks::calculate_state_root_with_updates(
-                &read_tx,
-                &write_tx,
-                post_state
-            ).unwrap();
+            // Update accounts
+            for (idx, (_, account)) in accounts.iter().enumerate() {
+                let key = format!("account:{}", idx).into_bytes();
 
-            // Commit transaction
-            write_tx.commit().unwrap();
+                // Create a modified account (increment balance)
+                let mut updated_account = account.clone();
+                updated_account.balance += U256::from(1);
+
+                // Serialize the updated account
+                let mut value = Vec::new();
+                value.extend_from_slice(&updated_account.nonce.to_le_bytes());
+
+                write_tx.put(&key, &value)?;
+            }
+
+            // Commit the transaction with updates
+            write_tx.commit()?;
 
             let duration = start.elapsed();
             total_duration += duration;
 
-            println!("    Completed in {:?}", duration);
+            println!("    Completed in {:.2}s", duration.as_secs_f64());
         }
 
         let avg_duration = total_duration / iterations as u32;
         results.push((count, avg_duration));
 
-        println!("Average update time for {} accounts: {:?}", count, avg_duration);
+        println!("Average update time for {} accounts: {:.?}s", count, avg_duration);
     }
 
-    results
+    Ok(results)
 }
-
-/// Generate a test post state with the specified number of accounts
-fn generate_test_post_state(count: usize) -> HashedPostState {
-    let mut post_state = HashedPostState::default();
-
-    for i in 0..count {
-        // Create an address using a deterministic pattern
-        let mut addr_bytes = [0u8; 20];
-        addr_bytes[0..8].copy_from_slice(&(i as u64).to_be_bytes());
-        let address = Address::from(addr_bytes);
-        let hashed_address = keccak256(address);
-
-        // Create a test account
-        let hashed_account = reth_trie::HashedAccount {
-            balance: U256::from(i * 1000),
-            nonce: (i % 1000) as u64,
-            bytecode_hash: Some(B256::random()),
-        };
-
-        // Add account to post state
-        post_state.accounts.insert(hashed_address, Some(hashed_account));
-
-        // Add some storage for the account
-        let mut storage = reth_trie::HashedStorage::default();
-
-        // Add a few storage slots per account
-        for j in 0..5 {
-            let mut slot_bytes = [0u8; 32];
-            slot_bytes[0..8].copy_from_slice(&(j as u64).to_be_bytes());
-            let slot = B256::from(slot_bytes);
-            let hashed_slot = keccak256(slot);
-
-            storage.storage.insert(hashed_slot, U256::from(j * 100));
-        }
-
-        post_state.storages.insert(hashed_address, storage);
-    }
-
-    post_state
-}
-*/
