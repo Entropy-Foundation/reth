@@ -13,6 +13,7 @@ reth-trie-db = { workspace = true }
 reth-db-api = { workspace = true }
 reth-db-rocks = { workspace = true, default-features = false }
 revm = { workspace = true }
+# reth-db-rocks = { git = "https://github.com/PsychoPunkSage/rocksreth", branch = "main" }
 
 # For performance measurements
 criterion = "0.5"
