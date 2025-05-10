@@ -14,7 +14,7 @@ use reth_trie::{
     updates::TrieUpdates, BranchNodeCompact, HashedPostState, KeccakKeyHasher, StateRoot,
     StateRootProgress, StorageRoot, StoredNibbles, TrieInput,
 };
-#[cfg(feature = "metrics")]
+// #[cfg(feature = "metrics")]
 use reth_trie::{metrics::TrieRootMetrics, TrieType};
 use reth_trie_db::{
     DatabaseHashedCursorFactory, DatabaseStateRoot, DatabaseStorageRoot, DatabaseTrieCursorFactory,
@@ -69,7 +69,7 @@ impl<'a> DatabaseStateRoot<'a, RocksTransaction<false>> for &'a RocksTransaction
 
     fn incremental_root_calculator(
         tx: &'a RocksTransaction<false>,
-        range: std::ops::RangeInclusive<u64>,
+        _range: std::ops::RangeInclusive<u64>,
     ) -> Result<Self, reth_execution_errors::StateRootError> {
         Ok(tx).map_err(|e| {
             reth_execution_errors::StateRootError::Database(DatabaseError::Other(format!(
@@ -196,11 +196,11 @@ impl<'a> DatabaseStateRoot<'a, RocksTransaction<false>> for &'a RocksTransaction
 }
 
 impl<'a> DatabaseStorageRoot<'a, RocksTransaction<false>> for &'a RocksTransaction<false> {
-    fn from_tx(tx: &'a RocksTransaction<false>, address: Address) -> Self {
+    fn from_tx(tx: &'a RocksTransaction<false>, _address: Address) -> Self {
         tx
     }
 
-    fn from_tx_hashed(tx: &'a RocksTransaction<false>, hashed_address: B256) -> Self {
+    fn from_tx_hashed(tx: &'a RocksTransaction<false>, _hashed_address: B256) -> Self {
         tx
     }
 
@@ -221,7 +221,7 @@ impl<'a> DatabaseStorageRoot<'a, RocksTransaction<false>> for &'a RocksTransacti
             HashedPostStateCursorFactory::new(DatabaseHashedCursorFactory::new(tx), &state_sorted),
             address,
             prefix_set,
-            #[cfg(feature = "metrics")]
+            // #[cfg(feature = "metrics")]
             TrieRootMetrics::new(TrieType::Storage),
         )
         .root()

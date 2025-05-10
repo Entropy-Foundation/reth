@@ -38,11 +38,15 @@ pub fn calculate_state_root_with_updates(
     post_state: HashedPostState,
 ) -> Result<B256, StateRootError> {
     // let prefix_sets = post_state.construct_prefix_sets().freeze();
-    println!("Post state account count: {}", post_state.accounts.len());
-    println!("Post state storage count: {}", post_state.storages.len());
-    println!("Post state storage count: \n  -{:?}", post_state);
+
+    // println!("Post state account count: {}", post_state.accounts.len());
+    // println!("Post state storage count: {}", post_state.storages.len());
+    // println!("Post state storage count: \n  -{:?}", post_state);
+
     let prefix_sets = post_state.construct_prefix_sets();
-    println!("Prefix sets: \n  -{:?}", prefix_sets);
+
+    // println!("Prefix sets: \n  -{:?}", prefix_sets);
+
     let frozen_sets = prefix_sets.freeze();
     let state_sorted = post_state.into_sorted();
     // println!("a2");
@@ -56,15 +60,15 @@ pub fn calculate_state_root_with_updates(
     .root_with_updates()?;
     // println!("a3");
 
-    println!("Root calculated: {}", root);
-    println!("Updates has {} account nodes", updates.account_nodes.len());
-    println!("Account Nodes::> {:?}", updates.account_nodes);
-    println!("Updates has {} storage tries", updates.storage_tries.len());
-    println!("Storage Tries {:?}", updates.storage_tries);
+    // println!("Root calculated: {}", root);
+    // println!("Updates has {} account nodes", updates.account_nodes.len());
+    // println!("Account Nodes::> {:?}", updates.account_nodes);
+    // println!("Updates has {} storage tries", updates.storage_tries.len());
+    // println!("Storage Tries {:?}", updates.storage_tries);
 
     // Store all the trie nodes
     commit_trie_updates(write_tx, updates)?;
-    println!("a4");
+    // println!("a4");
 
     Ok(root)
 }
@@ -74,23 +78,23 @@ fn commit_trie_updates(
     tx: &RocksTransaction<true>,
     updates: TrieUpdates,
 ) -> Result<(), StateRootError> {
-    let mut account_nodes_count = 0;
+    // let mut account_nodes_count = 0;
     // Store all account trie nodes
     for (hash, node) in updates.account_nodes {
-        println!("HERE");
+        // println!("HERE");
         tx.put::<AccountTrieTable>(TrieNibbles(hash), node.clone())
             .map_err(|e| StateRootError::Database(e))?;
-        account_nodes_count += 1;
+        // account_nodes_count += 1;
 
         // Also store in TrieTable with hash -> RLP
         let node_rlp = encode_branch_node_to_rlp(&node);
         let node_hash = keccak256(&node_rlp);
         tx.put::<TrieTable>(node_hash, node_rlp).map_err(|e| StateRootError::Database(e))?;
     }
-    println!("Stored {} account nodes", account_nodes_count);
+    // println!("Stored {} account nodes", account_nodes_count);
 
     // Store all storage trie nodes
-    let mut storage_nodes_count = 0;
+    // let mut storage_nodes_count = 0;
     for (hashed_address, storage_updates) in updates.storage_tries {
         println!("Processing storage trie for address: {}", hashed_address);
         for (storage_hash, node) in storage_updates.storage_nodes {
@@ -103,10 +107,10 @@ fn commit_trie_updates(
             tx.put::<StorageTrieTable>(hashed_address, node_value)
                 .map_err(|e| StateRootError::Database(e))?;
 
-            storage_nodes_count += 1;
+            // storage_nodes_count += 1;
         }
     }
-    println!("Stored {} storage nodes", storage_nodes_count);
+    // println!("Stored {} storage nodes", storage_nodes_count);
 
     Ok(())
 }
