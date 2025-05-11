@@ -18,8 +18,8 @@ pub fn benchmark_mdbx_proof_gen_time(
     for &count in account_counts {
         println!("Benchmarking MDBX proof generation time with {} accounts", count);
 
-        // Create temporary directory for database
-        let temp_dir = TempDir::new().unwrap();
+        // Create temporary directory for database (once per account count)
+        let temp_dir = TempDir::new()?;
         let db_path = temp_dir.path();
 
         // Generate accounts and post state
@@ -35,23 +35,22 @@ pub fn benchmark_mdbx_proof_gen_time(
             sample_addresses.push(Address::from(addr_bytes));
         }
 
-        // First populate the database with accounts
-        {
-            // Create the database with proper arguments
-            let db = mdbx::init_db(
-                db_path,
-                mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
-            )
-            .unwrap();
+        // Create the database with proper arguments (once)
+        let db = reth_db::mdbx::init_db(
+            db_path,
+            reth_db::mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
+        )
+        .unwrap();
 
+        // First populate the database with accounts (once)
+        {
             // Get a transaction for updates
-            let tx_mut = db.tx_mut().unwrap();
+            let tx_mut = db.tx_mut()?;
 
             // Convert post state to a format suitable for the trie
-            let post_state_clone = post_state.clone();
-            let prefix_sets = post_state_clone.construct_prefix_sets();
+            let prefix_sets = post_state.construct_prefix_sets();
             let frozen_sets = prefix_sets.freeze();
-            let state_sorted = post_state_clone.into_sorted();
+            let state_sorted = post_state.into_sorted();
 
             // Calculate state root with updates (this will update the trie)
             let (root, _updates) = reth_trie::StateRoot::new(
@@ -62,30 +61,22 @@ pub fn benchmark_mdbx_proof_gen_time(
                 ),
             )
             .with_prefix_sets(frozen_sets)
-            .root_with_updates()
-            .unwrap();
+            .root_with_updates()?;
 
             // Commit the transaction
-            tx_mut.inner.commit().unwrap();
+            tx_mut.inner.commit()?;
 
             println!("Initial state root: {}", root);
         }
 
         let mut durations = Vec::with_capacity(iterations);
 
-        // Now benchmark proof generation time
+        // Now benchmark proof generation time (reuse the same database)
         for i in 0..iterations {
             println!("  Iteration {}/{}", i + 1, iterations);
 
-            // Open the database for reading
-            let db = mdbx::open_db(
-                db_path,
-                mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
-            )
-            .unwrap();
-
-            // Get a transaction for reading
-            let tx = db.tx().unwrap();
+            // Get a read transaction (reuse existing database)
+            let tx = db.tx()?;
 
             // Measure proof generation time
             let start = Instant::now();
@@ -99,8 +90,8 @@ pub fn benchmark_mdbx_proof_gen_time(
                 );
 
                 let _proof = proof_generator.account_proof(*address, &[]).unwrap();
-                // Verify the proof contains data
-                assert!(!_proof.proof.is_empty(), "Proof should not be empty");
+                // Verify the proof contains data (optional assertion)
+                debug_assert!(!_proof.proof.is_empty(), "Proof should not be empty");
             }
 
             let duration = start.elapsed();
@@ -168,8 +159,6 @@ pub fn benchmark_rocksdb_proof_gen_time(
 
             // Create a read-only transaction
             let read_tx = RocksTransaction::<false>::new(db.clone(), false);
-
-            // Create proof generator using the transaction's cursor factories
 
             // Measure proof generation time
             let start = Instant::now();

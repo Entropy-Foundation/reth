@@ -1,3 +1,4 @@
+use crate::update_time::generate_test_post_state;
 use anyhow::Result;
 use reth_db::transaction::DbTx;
 use reth_db::Database;
@@ -10,8 +11,6 @@ use reth_trie_db::{DatabaseHashedCursorFactory, DatabaseTrieCursorFactory};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-use crate::update_time::generate_test_post_state;
-
 pub fn benchmark_mdbx_root_calc_time(
     account_counts: &[usize],
     iterations: usize,
@@ -21,35 +20,27 @@ pub fn benchmark_mdbx_root_calc_time(
     for &count in account_counts {
         println!("Benchmarking MDBX root calculation time with {} accounts", count);
 
-        // Create temporary directory for database
-        let temp_dir = TempDir::new().unwrap();
-        // let env = setup_mdbx_env(temp_dir.path()).unwrap();
+        // Create temporary directory for database (once per account count)
+        let temp_dir = TempDir::new()?;
 
-        // Generate accounts and post state
+        // Create the database with proper arguments (once)
+        let db = reth_db::mdbx::init_db(
+            temp_dir.path(),
+            reth_db::mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
+        )
+        .unwrap();
+
+        // Generate accounts and populate the database (once)
         let post_state = generate_test_post_state(count);
-
-        // First populate the database with accounts
         {
-            // Create the database with proper arguments
-            let db =
-                reth_db::mdbx::init_db(
-                    temp_dir.path(),
-                    reth_db::mdbx::DatabaseArguments::new(
-                        reth_db_api::models::ClientVersion::default(),
-                    ),
-                )
-                .unwrap();
-
-            // Get a transaction that implements DbTx for updating the database
-            let tx_mut = db.tx_mut().unwrap();
+            let tx_mut = db.tx_mut()?;
 
             // Convert post state to a format suitable for the trie
-            let post_state_clone = post_state.clone();
-            let prefix_sets = post_state_clone.construct_prefix_sets();
+            let prefix_sets = post_state.construct_prefix_sets();
             let frozen_sets = prefix_sets.freeze();
-            let state_sorted = post_state_clone.into_sorted();
+            let state_sorted = post_state.into_sorted();
 
-            // Calculate state root with updates (this will update the trie)
+            // Calculate state root with updates (this will populate the trie)
             let (root, _updates) = reth_trie::StateRoot::new(
                 reth_trie_db::DatabaseTrieCursorFactory::new(&tx_mut),
                 HashedPostStateCursorFactory::new(
@@ -58,47 +49,32 @@ pub fn benchmark_mdbx_root_calc_time(
                 ),
             )
             .with_prefix_sets(frozen_sets)
-            .root_with_updates()
-            .unwrap();
+            .root_with_updates()?;
 
             // Commit the transaction
-            tx_mut.inner.commit().unwrap();
+            tx_mut.inner.commit()?;
 
             println!("Initial state root: {}", root);
         }
 
         let mut durations = Vec::with_capacity(iterations);
 
-        // Now benchmark root calculation time
+        // Now benchmark root calculation time (reuse the same database)
         for i in 0..iterations {
             println!("  Iteration {}/{}", i + 1, iterations);
 
-            // Open the database for reading (use init_db or open_db)
-            let db =
-                reth_db::mdbx::open_db(
-                    temp_dir.path(),
-                    reth_db::mdbx::DatabaseArguments::new(
-                        reth_db_api::models::ClientVersion::default(),
-                    ),
-                )
-                .unwrap();
-
-            // Get a transaction that implements DbTx for reading
-            let tx = db.tx().unwrap();
+            // Get a read-only transaction
+            let tx = db.tx()?;
 
             // Measure root calculation time
             let start = Instant::now();
 
-            // Calculate state root
+            // Calculate state root from existing trie
             let _state_root = StateRoot::new(
                 DatabaseTrieCursorFactory::new(&tx),
                 DatabaseHashedCursorFactory::new(&tx),
             )
-            .root()
-            .unwrap();
-
-            // Simulate root calculation time
-            std::thread::sleep(Duration::from_millis(10));
+            .root()?;
 
             let duration = start.elapsed();
             durations.push(duration);

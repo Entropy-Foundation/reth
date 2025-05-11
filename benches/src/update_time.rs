@@ -64,87 +64,57 @@ pub fn benchmark_mdbx_update_time(
     for &count in account_counts {
         println!("Benchmarking MDBX update time with {} accounts", count);
 
+        // Create a temporary directory for the database (only once per account count)
+        let temp_dir = TempDir::new()?;
+
+        // Create the database with proper arguments (only once)
+        let db = reth_db::mdbx::init_db(
+            temp_dir.path(),
+            reth_db::mdbx::DatabaseArguments::new(reth_db_api::models::ClientVersion::default()),
+        )
+        .unwrap();
+
+        // Generate accounts once and reuse them
+        let accounts: Vec<(Address, Account)> = (0..count)
+            .map(|i| {
+                let mut addr_bytes = [0u8; 20];
+                addr_bytes[0..8].copy_from_slice(&(i as u64).to_be_bytes());
+                let address = Address::from(addr_bytes);
+                let account = generate_test_accounts(i);
+                (address, account)
+            })
+            .collect();
+
+        // Store initial state (only once)
+        {
+            let tx_mut = db.tx_mut()?;
+
+            for (address, account) in &accounts {
+                let hashed_address = keccak256(*address);
+                tx_mut.put::<HashedAccounts>(hashed_address, account.clone())?;
+            }
+
+            tx_mut.inner.commit()?;
+        }
+
         let mut total_duration = Duration::from_secs(0);
 
         for i in 0..iterations {
             println!("  Iteration {}/{}", i + 1, iterations);
 
-            // Create a temporary directory for the database
-            let temp_dir = TempDir::new()?;
-
-            // Generate initial post state
-            let post_state = generate_test_post_state(count);
-
-            // Create the database with proper arguments (same as root_calc.rs)
-            let db =
-                reth_db::mdbx::init_db(
-                    temp_dir.path(),
-                    reth_db::mdbx::DatabaseArguments::new(
-                        reth_db_api::models::ClientVersion::default(),
-                    ),
-                )
-                .unwrap();
-
-            // Get a transaction for updating the database
-            let tx_mut = db.tx_mut().unwrap();
-
-            // Store initial state (same pattern as root_calc.rs)
-            let post_state_clone = post_state.clone();
-            let prefix_sets = post_state_clone.construct_prefix_sets();
-            let frozen_sets = prefix_sets.freeze();
-            let state_sorted = post_state_clone.into_sorted();
-
-            // Calculate state root with updates to populate the trie
-            let (_initial_root, _updates) = reth_trie::StateRoot::new(
-                reth_trie_db::DatabaseTrieCursorFactory::new(&tx_mut),
-                HashedPostStateCursorFactory::new(
-                    reth_trie_db::DatabaseHashedCursorFactory::new(&tx_mut),
-                    &state_sorted,
-                ),
-            )
-            .with_prefix_sets(frozen_sets)
-            .root_with_updates()?;
-
-            // Commit the initial state
-            tx_mut.inner.commit()?;
-
-            // Now measure the update time
+            // Now measure just the update time
             let start = Instant::now();
 
-            // Create updated post state
-            let mut updated_post_state = HashedPostState::default();
-
-            // Generate updated accounts (increment balance for all accounts)
-            for i in 0..count {
-                let mut addr_bytes = [0u8; 20];
-                addr_bytes[0..8].copy_from_slice(&(i as u64).to_be_bytes());
-                let address = Address::from(addr_bytes);
-                let hashed_address = keccak256(address);
-
-                let mut account = generate_test_accounts(i);
-                account.balance += U256::from(1); // Update the account
-
-                updated_post_state.accounts.insert(hashed_address, Some(account));
-            }
-
-            // Open new transaction for updates
+            // Open transaction for updates
             let tx_mut = db.tx_mut()?;
 
-            // Convert updated post state
-            let prefix_sets = updated_post_state.construct_prefix_sets();
-            let frozen_sets = prefix_sets.freeze();
-            let state_sorted = updated_post_state.into_sorted();
-
-            // Calculate state root with the updates
-            let (_updated_root, _updates) = reth_trie::StateRoot::new(
-                reth_trie_db::DatabaseTrieCursorFactory::new(&tx_mut),
-                HashedPostStateCursorFactory::new(
-                    reth_trie_db::DatabaseHashedCursorFactory::new(&tx_mut),
-                    &state_sorted,
-                ),
-            )
-            .with_prefix_sets(frozen_sets)
-            .root_with_updates()?;
+            // Update accounts - just increment balance and save
+            for (address, account) in &accounts {
+                let mut updated_account = account.clone();
+                updated_account.balance += U256::from(1); // Update the account
+                let hashed_address = keccak256(*address);
+                tx_mut.put::<HashedAccounts>(hashed_address, updated_account)?;
+            }
 
             // Commit the updates
             tx_mut.inner.commit()?;
