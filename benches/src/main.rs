@@ -72,8 +72,8 @@ fn main() -> Result<()> {
         "Proof Generation Time (s)",
     )?;
 
-    // println!("\nBenchmark completed! Results written to 'benchmark_results' directory.");
-    // println!("Please check the CSV files for detailed results.");
+    println!("\nBenchmark completed! Results written to 'benchmark_results' directory.");
+    println!("Please check the CSV files for detailed results.");
 
     let duration = start.elapsed();
     println!("Benchmarking Completed in {:.2}s", duration.as_secs_f64());
