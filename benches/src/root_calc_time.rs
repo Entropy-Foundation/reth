@@ -131,12 +131,20 @@ pub fn benchmark_rocksdb_root_calc_time(
 
             // Create a read-only transaction
             let read_tx = RocksTransaction::<false>::new(db.clone(), false);
+            // Calculate state root directly
+            let post_state = HashedPostState::default();
+            let prefix_sets = post_state.construct_prefix_sets().freeze();
+            let state_sorted = post_state.into_sorted();
 
             // Measure root calculation time
             let start = Instant::now();
 
-            // Calculate state root directly
-            let _state_root = calculate_state_root(&read_tx, HashedPostState::default()).unwrap();
+            let _root = StateRoot::new(
+                read_tx.trie_cursor_factory(),
+                HashedPostStateCursorFactory::new(read_tx.hashed_cursor_factory(), &state_sorted),
+            )
+            .with_prefix_sets(prefix_sets)
+            .root()?;
 
             let duration = start.elapsed();
             durations.push(duration);
